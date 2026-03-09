@@ -51,3 +51,5 @@ const auditRes = await anthropic.messages.create({
  .update({ credits: profile.credits - 1 }).eq('id', userId);
  return Response.json({ auditId: audit.id, findings });
 }
+
+//nothing to see here
