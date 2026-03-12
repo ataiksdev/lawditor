@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import Link from 'next/link';
+import { ArrowLeft, CreditCard, Zap, CheckCircle, Shield, Rocket, Infinity, LocateFixed, Loader, ArrowRight } from 'lucide-react';
 
 const PLANS = [
   {
@@ -37,7 +38,7 @@ const PLANS = [
 
 export default function BillingPage() {
   const { data: session, status } = useSession();
-  const [profile, setProfile] = useState<{ credits: number; plan: string } | null>(null);
+  const [profile, setProfile] = useState<{ credits: number; plan: string; name: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [paying, setPaying] = useState<string | null>(null);
   const router = useRouter();
@@ -69,7 +70,6 @@ export default function BillingPage() {
     if (!session?.user?.email) return;
     setPaying(plan.name);
 
-    // Wait for Paystack script to be available
     let attempts = 0;
     while (!(window as any).PaystackPop && attempts < 20) {
       await new Promise(r => setTimeout(r, 200));
@@ -102,7 +102,7 @@ export default function BillingPage() {
           });
           const data = await res.json();
           if (data.success) {
-            fetchProfile(); // Refresh UI
+            fetchProfile(); 
             alert(`Successfully topped up ${plan.credits} credits!`);
           } else {
             throw new Error(data.error);
@@ -120,122 +120,139 @@ export default function BillingPage() {
   }
 
   if (status === 'loading' || loading) return (
-    <div className="min-h-screen bg-[#050505] flex flex-col items-center justify-center gap-4">
-      <div className="w-10 h-10 border-4 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin" />
-      <p className="text-white/40 text-sm font-medium tracking-widest uppercase">Securing Payment Channel</p>
+    <div className="min-h-screen bg-[#1e1e1e] flex flex-col items-center justify-center gap-6">
+      <div className="w-16 h-16 rounded-[2rem] bg-[#1e1e1e] flex items-center justify-center animate-pulse"
+           style={{ boxShadow: "inset 8px 8px 16px #161616, inset -8px -8px 16px #262626" }}>
+        <CreditCard className="w-8 h-8 text-[#d4af37]" />
+      </div>
+      <p className="text-gray-500 font-black text-sm uppercase tracking-[0.3em]">Opening Secure Vault</p>
     </div>
   );
 
   return (
-    <div className="min-h-screen bg-[#050505] text-white">
-      <nav className="sticky top-0 z-50 bg-[#050505]/80 backdrop-blur-xl border-b border-white/5">
-        <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
-          <Link href="/dashboard" className="text-white/40 hover:text-white transition-colors text-sm font-medium">
-            ← Dashboard
-          </Link>
-          <div className="flex items-center gap-2">
-            <span className="text-emerald-500 text-xl">⚖</span>
-            <span className="font-black text-xl tracking-tighter">Lawditor</span>
-          </div>
-          <div className="w-20" /> {/* Spacer */}
+    <div className="min-h-screen bg-[#1e1e1e] text-[#f2f2f2] p-8 md:p-12 lg:p-24">
+      {/* Navigation */}
+      <Link href="/dashboard" 
+            className="inline-flex items-center space-x-3 mb-16 text-gray-400 hover:text-white transition-all font-black text-sm uppercase tracking-widest group">
+        <div className="w-10 h-10 rounded-xl bg-[#1e1e1e] flex items-center justify-center transition-all group-hover:scale-110 shadow-nm-sm"
+             style={{ boxShadow: "4px 4px 8px #161616, -4px -4px 8px #262626" }}>
+          <ArrowLeft className="w-4 h-4" />
         </div>
-      </nav>
+        <span>Dashboard</span>
+      </Link>
 
-      <main className="max-w-6xl mx-auto px-6 py-16">
-        <div className="text-center mb-16">
-          <h1 className="text-6xl font-black mb-6 tracking-tighter">Upgrade Your Arsenal</h1>
-          <p className="text-white/40 text-xl max-w-2xl mx-auto leading-relaxed">
-            Credits power our deep-scrape legal AI engine. One credit equals one comprehensive Nigerian compliance audit.
-          </p>
-        </div>
+      <div className="max-w-7xl mx-auto">
+        <header className="mb-24 text-center">
+           <h2 className="text-sm font-black text-gray-500 uppercase tracking-[0.4em] mb-4">Capital Allocation</h2>
+           <h1 className="text-7xl font-black text-white leading-tight tracking-tight mb-8">
+             Scale Your <br />
+             <span className="text-[#d4af37]">Audit Reserves</span>
+           </h1>
+           <p className="text-xl text-gray-500 max-w-2xl mx-auto leading-relaxed">
+             Credits fuel our proprietary legal AI engine. Acquire premium units 
+             for high-fidelity Nigerian compliance auditing.
+           </p>
+        </header>
 
-        {/* Balance Card */}
-        <div className="bg-[#0f0f0f] border border-white/5 rounded-[40px] p-10 mb-16 flex flex-col md:flex-row items-center gap-12 relative overflow-hidden">
-           <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/5 blur-[100px] rounded-full" />
+        {/* Current Assets Card */}
+        <div className="p-16 rounded-[4rem] bg-[#1e1e1e] mb-20 flex flex-col md:flex-row items-center justify-between gap-12"
+             style={{ boxShadow: "20px 20px 40px #161616, -20px -20px 40px #262626" }}>
            
-           <div className="text-center md:text-left">
-             <p className="text-[10px] font-black tracking-[0.3em] text-white/30 uppercase mb-4">Current Reserves</p>
-             <div className="flex items-baseline gap-4 justify-center md:justify-start">
-                <span className="text-7xl font-black text-emerald-500 tabular-nums">{profile?.credits ?? 0}</span>
-                <span className="text-white/20 font-bold uppercase tracking-widest text-sm">Credits Available</span>
-             </div>
+           <div className="flex items-center space-x-10">
+              <div className="w-24 h-24 rounded-[2rem] bg-[#1e1e1e] flex items-center justify-center"
+                   style={{ boxShadow: "inset 8px 8px 16px #161616, inset -8px -8px 16px #262626" }}>
+                 <Zap className="w-12 h-12 text-[#d4af37]" />
+              </div>
+              <div>
+                 <div className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Available Capacity</div>
+                 <div className="flex items-baseline space-x-3">
+                    <div className="text-7xl font-black text-white tracking-tighter">{profile?.credits || 0}</div>
+                    <div className="text-xl font-black text-[#d4af37]">UNITS</div>
+                 </div>
+              </div>
            </div>
 
-           <div className="hidden md:block w-[1px] h-20 bg-white/5" />
+           <div className="h-20 w-[1px] bg-white/5 hidden md:block" />
 
-           <div className="text-center md:text-left">
-             <p className="text-[10px] font-black tracking-[0.3em] text-white/30 uppercase mb-4">Current Plan</p>
-             <p className="text-3xl font-black text-white capitalize">{profile?.plan || 'Free Tier'}</p>
+           <div className="text-center md:text-right">
+              <div className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Protocol Tier</div>
+              <div className="text-4xl font-black text-white tracking-tight capitalize">{profile?.plan || 'Professional'}</div>
+              <div className="text-xs font-bold text-gray-600 mt-1">LIFETIME ACCESS GRANTED</div>
            </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-20">
-          {PLANS.map(plan => (
-            <div 
-              key={plan.name} 
-              className={`relative bg-[#0f0f0f] border rounded-[32px] p-10 flex flex-col transition-all hover:-translate-y-2 ${
-                plan.highlight ? 'border-emerald-500/40 ring-1 ring-emerald-500/20 shadow-2xl shadow-emerald-500/10' : 'border-white/5'
-              }`}
-            >
-              {plan.highlight && (
-                <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1.5 bg-emerald-500 text-black text-[10px] font-black uppercase tracking-widest rounded-full shadow-lg">
-                  Most Efficient
-                </div>
-              )}
+        {/* Pricing Matrix */}
+        <div className="grid md:grid-cols-3 gap-12 mb-24">
+          {PLANS.map((plan) => (
+            <div key={plan.name} className="flex flex-col">
+               <div className={`p-10 rounded-[3rem] bg-[#1e1e1e] flex flex-col h-full relative border-none`}
+                    style={{ 
+                        boxShadow: plan.highlight ? "inset 6px 6px 12px #161616, inset -6px -6px 12px #262626" : "12px 12px 24px #161616, -12px -12px 24px #262626" 
+                    }}>
+                  
+                  {plan.highlight && (
+                    <div className="absolute top-8 right-8">
+                       <CheckCircle className="w-6 h-6 text-[#d4af37]" />
+                    </div>
+                  )}
 
-              <div className="mb-10">
-                <p className="text-[10px] font-black tracking-[0.2em] text-white/30 uppercase mb-4">{plan.name}</p>
-                <div className="flex items-baseline gap-1 mb-2">
-                  <span className="text-4xl font-black">{plan.price}</span>
-                </div>
-                <p className="text-xs text-white/25 font-medium">{plan.perAudit}</p>
-              </div>
-
-              <div className="flex-grow space-y-4 mb-10">
-                {plan.features.map((f, i) => (
-                  <div key={i} className="flex gap-3 text-sm text-white/50 items-start">
-                    <span className="text-emerald-500 font-bold">✓</span>
-                    <span>{f}</span>
+                  <div className="mb-12">
+                     <div className="text-[10px] font-black text-[#d4af37] uppercase tracking-[0.3em] mb-4">{plan.name} Package</div>
+                     <div className="text-5xl font-black text-white mb-2">{plan.price}</div>
+                     <div className="text-xs font-bold text-gray-600 uppercase tracking-widest">{plan.perAudit}</div>
                   </div>
-                ))}
-              </div>
 
-              <button
-                onClick={() => handlePayment(plan)}
-                disabled={!!paying}
-                className={`w-full py-4 rounded-2xl font-black transition-all ${
-                  plan.highlight 
-                    ? 'bg-emerald-500 hover:bg-emerald-400 text-black shadow-xl shadow-emerald-500/20' 
-                    : 'bg-white/5 hover:bg-white/10 text-white'
-                } disabled:opacity-50`}
-              >
-                {paying === plan.name ? 'Connecting Paystack...' : `Buy ${plan.credits} Credits`}
-              </button>
+                  <div className="space-y-6 mb-12 flex-1">
+                     {plan.features.map((f, i) => (
+                        <div key={i} className="flex items-center space-x-4 group">
+                           <div className="w-6 h-6 rounded-lg bg-[#1e1e1e] flex items-center justify-center shrink-0"
+                                style={{ boxShadow: "inset 2px 2px 4px #161616, inset -2px -2px 4px #262626" }}>
+                              <CheckCircle className="w-3 h-3 text-[#d4af37]" />
+                           </div>
+                           <span className="text-sm font-bold text-gray-500 group-hover:text-gray-300 transition-colors tracking-tight">{f}</span>
+                        </div>
+                     ))}
+                  </div>
+
+                  <button 
+                    onClick={() => handlePayment(plan)}
+                    disabled={!!paying}
+                    className="w-full py-5 rounded-2xl bg-gradient-to-br from-[#d4af37] to-[#c5a028] text-white font-black text-lg transition-all hover:scale-[1.03] active:scale-[0.97] flex items-center justify-center space-x-3 disabled:opacity-50"
+                    style={{ boxShadow: "8px 8px 16px #161616, -8px -8px 16px #262626" }}>
+                    {paying === plan.name ? (
+                       <Loader className="w-5 h-5 animate-spin" />
+                    ) : (
+                       <>
+                        <span>Acquire {plan.credits} Units</span>
+                        <ArrowRight className="w-5 h-5" />
+                       </>
+                    )}
+                  </button>
+               </div>
             </div>
           ))}
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-           <InfoCard icon="🔒" title="Secure" text="Powered by Paystack. Enterprise-grade security." />
-           <InfoCard icon="🚀" title="Instant" text="Credits applied to your account immediately." />
-           <InfoCard icon="♾️" title="Permenent" text="Your credits will never expire. Use anytime." />
-           <InfoCard icon="🇳🇬" title="Native" text="Full support for all Nigerian bank cards." />
+        {/* Security Grid */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-8">
+           {[
+             { icon: Shield, title: "Secured", desc: "Paystack-powered 256-bit encryption" },
+             { icon: Rocket, title: "Instant", desc: "Credits activated within 400ms" },
+             { icon: Infinity, title: "Perpetual", desc: "Audit units never expire" },
+             { icon: LocateFixed, title: "Localized", desc: "Optimized for Nigerian Naira" }
+           ].map((item, idx) => (
+             <div key={idx} className="p-8 rounded-3xl bg-[#1e1e1e] text-center"
+                  style={{ boxShadow: "6px 6px 12px #161616, -6px -6px 12px #262626" }}>
+                <div className="w-12 h-12 rounded-2xl bg-[#1e1e1e] flex items-center justify-center mx-auto mb-6"
+                     style={{ boxShadow: "inset 4px 4px 8px #161616, inset -4px -4px 8px #262626" }}>
+                   <item.icon className="w-5 h-5 text-[#d4af37]" />
+                </div>
+                <h4 className="font-black text-white mb-2">{item.title}</h4>
+                <p className="text-xs font-bold text-gray-600 leading-relaxed tracking-tight">{item.desc}</p>
+             </div>
+           ))}
         </div>
-      </main>
-
-      <footer className="py-20 text-center border-t border-white/5">
-        <p className="text-white/20 text-xs font-medium tracking-widest uppercase">LAW DITOR — NIGERIA'S SMART COMPLIANCE PARTNER</p>
-      </footer>
-    </div>
-  );
-}
-
-function InfoCard({ icon, title, text }: any) {
-  return (
-    <div className="bg-[#0f0f0f] border border-white/5 p-6 rounded-2xl">
-      <div className="text-2xl mb-4">{icon}</div>
-      <h3 className="font-bold text-white mb-2">{title}</h3>
-      <p className="text-sm text-white/40 leading-relaxed">{text}</p>
+      </div>
     </div>
   );
 }

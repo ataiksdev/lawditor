@@ -1,26 +1,79 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #1e1e1e;
+  --foreground: #f2f2f2;
+  --accent: #d4af37;
+  --accent-secondary: #c5a028;
+  
+  /* Neumorphic Shadow Tokens (Dark) */
+  --nm-shadow: 6px 6px 12px #161616, -6px -6px 12px #262626;
+  --nm-shadow-inset: inset 4px 4px 8px #161616, inset -4px -4px 8px #262626;
+  --nm-shadow-lg: 12px 12px 24px #161616, -12px -12px 24px #262626;
+  --nm-shadow-sm: 4px 4px 8px #161616, -4px -4px 8px #262626;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-accent: var(--accent);
+  --color-accent-secondary: var(--accent-secondary);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  margin: 0;
+  overflow-x: hidden;
+}
+
+/* Neumorphic Utility Classes */
+.nm-flat {
+  background: var(--background);
+  border-radius: 1rem;
+  box-shadow: var(--nm-shadow);
+}
+
+.nm-inset {
+  background: var(--background);
+  border-radius: 1rem;
+  box-shadow: var(--nm-shadow-inset);
+}
+
+.nm-button {
+  background: var(--background);
+  border-radius: 0.75rem;
+  box-shadow: var(--nm-shadow-sm);
+  transition: all 0.2s ease;
+  border: none;
+  cursor: pointer;
+}
+
+.nm-button:active {
+  box-shadow: var(--nm-shadow-inset);
+}
+
+.nm-card {
+  background: var(--background);
+  border-radius: 1.5rem;
+  box-shadow: var(--nm-shadow-lg);
+  padding: 1.5rem;
+}
+
+.nm-accent-button {
+  background: linear-gradient(145deg, var(--accent), var(--accent-secondary));
+  border-radius: 0.75rem;
+  box-shadow: var(--nm-shadow-sm);
+  transition: all 0.2s ease;
+  border: none;
+  color: white;
+  cursor: pointer;
+}
+
+.nm-accent-button:active {
+  background: linear-gradient(145deg, var(--accent-secondary), var(--accent));
+  box-shadow: var(--nm-shadow-inset);
 }
