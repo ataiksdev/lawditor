@@ -1,7 +1,8 @@
 'use client';
+
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { createClient } from '@/lib/supabase-client';
+import { useSession } from 'next-auth/react';
 import Link from 'next/link';
 
 const PLANS = [
@@ -35,27 +36,37 @@ const PLANS = [
 ];
 
 export default function BillingPage() {
-  const [user,    setUser]    = useState<any>(null);
+  const { data: session, status } = useSession();
   const [profile, setProfile] = useState<{ credits: number; plan: string } | null>(null);
   const [loading, setLoading] = useState(true);
-  const [paying,  setPaying]  = useState<string | null>(null);
+  const [paying, setPaying] = useState<string | null>(null);
   const router = useRouter();
 
   useEffect(() => {
-    (async () => {
-      const supabase = createClient();
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { router.push('/login'); return; }
-      setUser(user);
-      const { data: prof } = await supabase
-        .from('profiles').select('credits,plan').eq('id', user.id).single();
-      setProfile(prof);
+    if (status === 'unauthenticated') {
+      router.push('/login');
+    }
+    if (status === 'authenticated') {
+      fetchProfile();
+    }
+  }, [status, router]);
+
+  async function fetchProfile() {
+    try {
+      const res = await fetch('/api/dashboard');
+      if (res.ok) {
+        const data = await res.json();
+        setProfile(data.profile);
+      }
+    } catch (e) {
+      console.error("Failed to fetch profile:", e);
+    } finally {
       setLoading(false);
-    })();
-  }, [router]);
+    }
+  }
 
   async function handlePayment(plan: typeof PLANS[0]) {
-    if (!user) return;
+    if (!session?.user?.email) return;
     setPaying(plan.name);
 
     // Wait for Paystack script to be available
@@ -72,12 +83,12 @@ export default function BillingPage() {
     }
 
     const handler = (window as any).PaystackPop.setup({
-      key:      process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY,
-      email:    user.email,
-      amount:   plan.kobo,
+      key: process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY,
+      email: session.user.email,
+      amount: plan.kobo,
       currency: 'NGN',
-      ref:      `lawditor_${Date.now()}_${user.id.slice(0,8)}`,
-      metadata: { userId: user.id, credits: plan.credits, plan: plan.name },
+      ref: `lawditor_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+      metadata: { credits: plan.credits, plan: plan.name },
       callback: async (response: { reference: string }) => {
         try {
           const res = await fetch('/api/billing/verify', {
@@ -85,20 +96,19 @@ export default function BillingPage() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               reference: response.reference,
-              credits:   plan.credits,
-              userId:    user.id,
+              credits: plan.credits,
+              planName: plan.name,
             }),
           });
           const data = await res.json();
           if (data.success) {
-            // Refresh credits display
-            const supabase = createClient();
-            const { data: prof } = await supabase
-              .from('profiles').select('credits,plan').eq('id', user.id).single();
-            setProfile(prof);
+            fetchProfile(); // Refresh UI
+            alert(`Successfully topped up ${plan.credits} credits!`);
+          } else {
+            throw new Error(data.error);
           }
-        } catch {
-          alert('Payment verification failed. Contact support with your reference: ' + response.reference);
+        } catch (e: any) {
+          alert('Payment verification failed: ' + e.message);
         } finally {
           setPaying(null);
         }
@@ -109,237 +119,123 @@ export default function BillingPage() {
     handler.openIframe();
   }
 
-  if (loading) return (
-    <div style={styles.loadWrap}>
-      <div style={styles.spinner} />
-      <p style={styles.loadText}>Loading billing…</p>
+  if (status === 'loading' || loading) return (
+    <div className="min-h-screen bg-[#050505] flex flex-col items-center justify-center gap-4">
+      <div className="w-10 h-10 border-4 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin" />
+      <p className="text-white/40 text-sm font-medium tracking-widest uppercase">Securing Payment Channel</p>
     </div>
   );
 
   return (
-    <div style={styles.root}>
-      {/* ── Nav ──────────────────────────────────────────────── */}
-      <nav style={styles.nav}>
-        <div style={styles.navInner}>
-          <Link href="/dashboard" style={styles.backLink}>← Dashboard</Link>
-          <div style={styles.logo}><span>⚖</span><span style={styles.logoText}>Lawditor</span></div>
-          <div />
+    <div className="min-h-screen bg-[#050505] text-white">
+      <nav className="sticky top-0 z-50 bg-[#050505]/80 backdrop-blur-xl border-b border-white/5">
+        <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
+          <Link href="/dashboard" className="text-white/40 hover:text-white transition-colors text-sm font-medium">
+            ← Dashboard
+          </Link>
+          <div className="flex items-center gap-2">
+            <span className="text-emerald-500 text-xl">⚖</span>
+            <span className="font-black text-xl tracking-tighter">Lawditor</span>
+          </div>
+          <div className="w-20" /> {/* Spacer */}
         </div>
       </nav>
 
-      <main style={styles.main}>
-
-        {/* ── Header ──────────────────────────────────────────── */}
-        <div style={styles.pageHeader}>
-          <h1 style={styles.pageTitle}>Top Up Credits</h1>
-          <p style={styles.pageSubtitle}>
-            Each credit = one full compliance audit. Credits never expire.
+      <main className="max-w-6xl mx-auto px-6 py-16">
+        <div className="text-center mb-16">
+          <h1 className="text-6xl font-black mb-6 tracking-tighter">Upgrade Your Arsenal</h1>
+          <p className="text-white/40 text-xl max-w-2xl mx-auto leading-relaxed">
+            Credits power our deep-scrape legal AI engine. One credit equals one comprehensive Nigerian compliance audit.
           </p>
         </div>
 
-        {/* ── Current balance ──────────────────────────────────── */}
-        <div style={styles.balanceCard}>
-          <div style={styles.balanceLeft}>
-            <p style={styles.balanceLabel}>Current Balance</p>
-            <p style={styles.balanceValue}>{profile?.credits ?? 0}</p>
-            <p style={styles.balanceSub}>credits remaining</p>
-          </div>
-          <div style={styles.balanceDivider} />
-          <div style={styles.balanceRight}>
-            <p style={styles.balanceLabel}>Plan</p>
-            <p style={styles.planName}>{profile?.plan ?? 'free'}</p>
-            <p style={styles.balanceSub}>
-              {profile?.credits === 0
-                ? '⚠ You have no credits — top up to run audits'
-                : profile?.credits === 1
-                ? '1 audit remaining'
-                : `${profile?.credits} audits remaining`}
-            </p>
-          </div>
+        {/* Balance Card */}
+        <div className="bg-[#0f0f0f] border border-white/5 rounded-[40px] p-10 mb-16 flex flex-col md:flex-row items-center gap-12 relative overflow-hidden">
+           <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/5 blur-[100px] rounded-full" />
+           
+           <div className="text-center md:text-left">
+             <p className="text-[10px] font-black tracking-[0.3em] text-white/30 uppercase mb-4">Current Reserves</p>
+             <div className="flex items-baseline gap-4 justify-center md:justify-start">
+                <span className="text-7xl font-black text-emerald-500 tabular-nums">{profile?.credits ?? 0}</span>
+                <span className="text-white/20 font-bold uppercase tracking-widest text-sm">Credits Available</span>
+             </div>
+           </div>
+
+           <div className="hidden md:block w-[1px] h-20 bg-white/5" />
+
+           <div className="text-center md:text-left">
+             <p className="text-[10px] font-black tracking-[0.3em] text-white/30 uppercase mb-4">Current Plan</p>
+             <p className="text-3xl font-black text-white capitalize">{profile?.plan || 'Free Tier'}</p>
+           </div>
         </div>
 
-        {/* ── Plan cards ──────────────────────────────────────── */}
-        <div style={styles.plansGrid}>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-20">
           {PLANS.map(plan => (
-            <div
-              key={plan.name}
-              style={{
-                ...styles.planCard,
-                ...(plan.highlight ? styles.planCardHighlight : {}),
-              }}
+            <div 
+              key={plan.name} 
+              className={`relative bg-[#0f0f0f] border rounded-[32px] p-10 flex flex-col transition-all hover:-translate-y-2 ${
+                plan.highlight ? 'border-emerald-500/40 ring-1 ring-emerald-500/20 shadow-2xl shadow-emerald-500/10' : 'border-white/5'
+              }`}
             >
               {plan.highlight && (
-                <div style={styles.popularBadge}>Most Popular</div>
+                <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1.5 bg-emerald-500 text-black text-[10px] font-black uppercase tracking-widest rounded-full shadow-lg">
+                  Most Efficient
+                </div>
               )}
 
-              <div style={styles.planTop}>
-                <p style={styles.planNameLabel}>{plan.name}</p>
-                <p style={styles.planPrice}>{plan.price}</p>
-                <p style={styles.planPerAudit}>{plan.perAudit}</p>
+              <div className="mb-10">
+                <p className="text-[10px] font-black tracking-[0.2em] text-white/30 uppercase mb-4">{plan.name}</p>
+                <div className="flex items-baseline gap-1 mb-2">
+                  <span className="text-4xl font-black">{plan.price}</span>
+                </div>
+                <p className="text-xs text-white/25 font-medium">{plan.perAudit}</p>
               </div>
 
-              <ul style={styles.featureList}>
+              <div className="flex-grow space-y-4 mb-10">
                 {plan.features.map((f, i) => (
-                  <li key={i} style={styles.featureItem}>
-                    <span style={{
-                      ...styles.featureCheck,
-                      color: plan.highlight ? '#c9a84c' : '#10b981',
-                    }}>✓</span>
-                    {f}
-                  </li>
+                  <div key={i} className="flex gap-3 text-sm text-white/50 items-start">
+                    <span className="text-emerald-500 font-bold">✓</span>
+                    <span>{f}</span>
+                  </div>
                 ))}
-              </ul>
+              </div>
 
               <button
-                style={{
-                  ...styles.buyBtn,
-                  ...(plan.highlight ? styles.buyBtnHighlight : {}),
-                  opacity: paying ? 0.6 : 1,
-                }}
                 onClick={() => handlePayment(plan)}
                 disabled={!!paying}
+                className={`w-full py-4 rounded-2xl font-black transition-all ${
+                  plan.highlight 
+                    ? 'bg-emerald-500 hover:bg-emerald-400 text-black shadow-xl shadow-emerald-500/20' 
+                    : 'bg-white/5 hover:bg-white/10 text-white'
+                } disabled:opacity-50`}
               >
-                {paying === plan.name ? 'Opening Paystack…' : `Buy ${plan.credits} Credits`}
+                {paying === plan.name ? 'Connecting Paystack...' : `Buy ${plan.credits} Credits`}
               </button>
             </div>
           ))}
         </div>
 
-        {/* ── FAQ / info ───────────────────────────────────────── */}
-        <div style={styles.infoGrid}>
-          <InfoCard icon="💳" title="Secure Payments" body="Powered by Paystack. Your card details are never stored on our servers." />
-          <InfoCard icon="⏱" title="Credits Never Expire" body="Top up once, use whenever. No monthly subscription, no auto-renewals." />
-          <InfoCard icon="🇳🇬" title="Nigerian Naira" body="All prices in NGN. Paystack supports all major Nigerian banks and cards." />
-          <InfoCard icon="📧" title="Questions?" body="Email support@lawditor.ng with your transaction reference for any billing issues." />
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+           <InfoCard icon="🔒" title="Secure" text="Powered by Paystack. Enterprise-grade security." />
+           <InfoCard icon="🚀" title="Instant" text="Credits applied to your account immediately." />
+           <InfoCard icon="♾️" title="Permenent" text="Your credits will never expire. Use anytime." />
+           <InfoCard icon="🇳🇬" title="Native" text="Full support for all Nigerian bank cards." />
         </div>
       </main>
+
+      <footer className="py-20 text-center border-t border-white/5">
+        <p className="text-white/20 text-xs font-medium tracking-widest uppercase">LAW DITOR — NIGERIA'S SMART COMPLIANCE PARTNER</p>
+      </footer>
     </div>
   );
 }
 
-function InfoCard({ icon, title, body }: { icon: string; title: string; body: string }) {
+function InfoCard({ icon, title, text }: any) {
   return (
-    <div style={styles.infoCard}>
-      <span style={styles.infoIcon}>{icon}</span>
-      <p style={styles.infoTitle}>{title}</p>
-      <p style={styles.infoBody}>{body}</p>
+    <div className="bg-[#0f0f0f] border border-white/5 p-6 rounded-2xl">
+      <div className="text-2xl mb-4">{icon}</div>
+      <h3 className="font-bold text-white mb-2">{title}</h3>
+      <p className="text-sm text-white/40 leading-relaxed">{text}</p>
     </div>
   );
 }
-
-const styles: Record<string, React.CSSProperties> = {
-  root: { minHeight: '100vh', background: '#0b0f1a', color: '#e2e8f0', fontFamily: "'Georgia', serif" },
-  loadWrap: {
-    minHeight: '100vh', background: '#0b0f1a',
-    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16,
-  },
-  spinner: {
-    width: 36, height: 36, border: '3px solid rgba(201,168,76,0.2)',
-    borderTop: '3px solid #c9a84c', borderRadius: '50%',
-    animation: 'spin 0.8s linear infinite',
-  },
-  loadText: { color: '#64748b', fontSize: 14, fontFamily: 'system-ui, sans-serif' },
-
-  nav: {
-    borderBottom: '1px solid rgba(255,255,255,0.06)',
-    background: 'rgba(11,15,26,0.95)', backdropFilter: 'blur(12px)',
-    position: 'sticky', top: 0, zIndex: 100,
-  },
-  navInner: {
-    maxWidth: 1000, margin: '0 auto', padding: '0 24px',
-    height: 60, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-  },
-  backLink: { fontSize: 14, color: '#94a3b8', textDecoration: 'none', fontFamily: 'system-ui, sans-serif' },
-  logo: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 18 },
-  logoText: { fontWeight: 700, color: '#f1f5f9', fontSize: 18 },
-
-  main: { maxWidth: 1000, margin: '0 auto', padding: '48px 24px 80px' },
-
-  pageHeader: { textAlign: 'center', marginBottom: 40 },
-  pageTitle: {
-    fontSize: 34, fontWeight: 700, color: '#f1f5f9',
-    margin: '0 0 8px', letterSpacing: '-0.02em',
-  },
-  pageSubtitle: { fontSize: 16, color: '#64748b', margin: 0, fontFamily: 'system-ui, sans-serif' },
-
-  // Balance
-  balanceCard: {
-    display: 'flex', alignItems: 'center',
-    background: 'rgba(201,168,76,0.05)', border: '1px solid rgba(201,168,76,0.2)',
-    borderRadius: 12, padding: '24px 32px', marginBottom: 36, gap: 32, flexWrap: 'wrap',
-  },
-  balanceLeft: {},
-  balanceDivider: { width: 1, height: 56, background: 'rgba(201,168,76,0.15)', flexShrink: 0 },
-  balanceRight: {},
-  balanceLabel: {
-    fontSize: 11, fontWeight: 600, color: '#64748b',
-    textTransform: 'uppercase', letterSpacing: '0.08em',
-    margin: '0 0 4px', fontFamily: 'system-ui, sans-serif',
-  },
-  balanceValue: { fontSize: 42, fontWeight: 700, color: '#c9a84c', margin: '0 0 2px', lineHeight: 1 },
-  balanceSub: { fontSize: 13, color: '#475569', margin: 0, fontFamily: 'system-ui, sans-serif' },
-  planName: { fontSize: 20, fontWeight: 700, color: '#f1f5f9', margin: '0 0 2px', textTransform: 'capitalize' },
-
-  // Plans
-  plansGrid: {
-    display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
-    gap: 20, marginBottom: 40,
-  },
-  planCard: {
-    background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)',
-    borderRadius: 14, padding: '28px 24px', display: 'flex', flexDirection: 'column',
-    position: 'relative', overflow: 'hidden',
-  },
-  planCardHighlight: {
-    background: 'rgba(201,168,76,0.05)', border: '1px solid rgba(201,168,76,0.3)',
-    boxShadow: '0 0 32px rgba(201,168,76,0.08)',
-  },
-  popularBadge: {
-    position: 'absolute', top: 16, right: 16,
-    fontSize: 10, fontWeight: 700, color: '#0b0f1a',
-    background: '#c9a84c', padding: '3px 8px', borderRadius: 4,
-    letterSpacing: '0.06em', fontFamily: 'system-ui, sans-serif',
-  },
-  planTop: { marginBottom: 20 },
-  planNameLabel: {
-    fontSize: 12, fontWeight: 700, color: '#c9a84c',
-    textTransform: 'uppercase', letterSpacing: '0.1em',
-    margin: '0 0 8px', fontFamily: 'system-ui, sans-serif',
-  },
-  planPrice: { fontSize: 32, fontWeight: 700, color: '#f1f5f9', margin: '0 0 4px', lineHeight: 1 },
-  planPerAudit: { fontSize: 13, color: '#64748b', margin: 0, fontFamily: 'system-ui, sans-serif' },
-
-  featureList: {
-    listStyle: 'none', margin: '0 0 24px', padding: 0,
-    display: 'flex', flexDirection: 'column', gap: 10, flex: 1,
-  },
-  featureItem: {
-    display: 'flex', alignItems: 'flex-start', gap: 8,
-    fontSize: 14, color: '#94a3b8', fontFamily: 'system-ui, sans-serif', lineHeight: 1.5,
-  },
-  featureCheck: { flexShrink: 0, fontWeight: 700, marginTop: 1 },
-
-  buyBtn: {
-    width: '100%', padding: '13px', borderRadius: 8,
-    fontSize: 14, fontWeight: 700, cursor: 'pointer',
-    background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)',
-    color: '#e2e8f0', fontFamily: 'system-ui, sans-serif',
-    transition: 'opacity 0.15s',
-  },
-  buyBtnHighlight: {
-    background: '#c9a84c', border: '1px solid #c9a84c',
-    color: '#0b0f1a',
-  },
-
-  // Info cards
-  infoGrid: {
-    display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16,
-  },
-  infoCard: {
-    background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)',
-    borderRadius: 10, padding: '20px',
-  },
-  infoIcon: { fontSize: 22, display: 'block', marginBottom: 10 },
-  infoTitle: { fontSize: 14, fontWeight: 600, color: '#e2e8f0', margin: '0 0 6px' },
-  infoBody: { fontSize: 13, color: '#475569', margin: 0, lineHeight: 1.6, fontFamily: 'system-ui, sans-serif' },
-};

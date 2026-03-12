@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import Script from 'next/script';
+import { Providers } from "./providers";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -26,8 +27,17 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-        {children}
-        <Script src="https://js.paystack.co/v1/inline.js" strategy="beforeInteractive" />
+        <Providers>
+          {children}
+        </Providers>
+        {/* 
+          ✅ Use "afterInteractive" — "beforeInteractive" is Pages Router only
+          and silently fails in the App Router, causing PaystackPop to never load.
+        */}
+        <Script
+          src="https://js.paystack.co/v1/inline.js"
+          strategy="afterInteractive"
+        />
         <style>{`
           @keyframes spin {
             to { transform: rotate(360deg); }

@@ -1,19 +1,22 @@
 'use client';
+
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { createClient } from '@/lib/supabase-client';
+import { useSession, signOut } from 'next-auth/react';
 import Link from 'next/link';
 
 interface Audit {
   id: string;
-  input_url: string;
-  risk_score: 'HIGH' | 'MEDIUM' | 'LOW';
+  inputUrl: string;
+  riskScore: 'HIGH' | 'MEDIUM' | 'LOW';
   status: string;
-  created_at: string;
-  findings?: { app_name?: string; executive_summary?: string };
+  createdAt: string;
+  findings?: any;
 }
 
 interface Profile {
+  email: string;
+  name: string;
   plan: string;
   credits: number;
 }
@@ -25,37 +28,39 @@ const RISK_CONFIG = {
 };
 
 export default function Dashboard() {
-  const [user, setUser]       = useState<any>(null);
+  const { data: session, status } = useSession();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [audits, setAudits]   = useState<Audit[]>([]);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
   useEffect(() => {
-    (async () => {
-      const supabase = createClient();
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { router.push('/login'); return; }
-      setUser(user);
+    if (status === 'unauthenticated') {
+      router.push('/login');
+    }
 
-      const [{ data: prof }, { data: auds }] = await Promise.all([
-        supabase.from('profiles').select('plan,credits').eq('id', user.id).single(),
-        supabase.from('audits')
-          .select('id,input_url,risk_score,status,created_at,findings')
-          .eq('user_id', user.id)
-          .order('created_at', { ascending: false })
-          .limit(20),
-      ]);
-      setProfile(prof);
-      setAudits(auds || []);
+    if (status === 'authenticated') {
+      fetchData();
+    }
+  }, [status, router]);
+
+  async function fetchData() {
+    try {
+      const res = await fetch('/api/dashboard');
+      if (res.ok) {
+        const data = await res.json();
+        setProfile(data.profile);
+        setAudits(data.audits);
+      }
+    } catch (error) {
+      console.error("Failed to fetch dashboard data:", error);
+    } finally {
       setLoading(false);
-    })();
-  }, [router]);
+    }
+  }
 
-  async function signOut() {
-    const supabase = createClient();
-    await supabase.auth.signOut();
-    router.push('/login');
+  function handleSignOut() {
+    signOut({ callbackUrl: '/login' });
   }
 
   function formatDate(iso: string) {
@@ -69,270 +74,115 @@ export default function Dashboard() {
   }
 
   const riskCounts = {
-    HIGH:   audits.filter(a => a.risk_score === 'HIGH').length,
-    MEDIUM: audits.filter(a => a.risk_score === 'MEDIUM').length,
-    LOW:    audits.filter(a => a.risk_score === 'LOW').length,
+    HIGH:   audits.filter(a => a.riskScore === 'HIGH').length,
+    MEDIUM: audits.filter(a => a.riskScore === 'MEDIUM').length,
+    LOW:    audits.filter(a => a.riskScore === 'LOW').length,
   };
 
-  if (loading) return (
-    <div style={styles.loadWrap}>
-      <div style={styles.spinner} />
-      <p style={styles.loadText}>Loading your workspace…</p>
+  if (status === 'loading' || loading) return (
+    <div className="min-h-screen bg-[#050505] flex flex-col items-center justify-center gap-4">
+      <div className="w-10 h-10 border-4 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin" />
+      <p className="text-white/40 text-sm font-medium tracking-widest uppercase">Initializing Dashboard</p>
     </div>
   );
 
   return (
-    <div style={styles.root}>
-      {/* ── Top nav ─────────────────────────────────────────── */}
-      <nav style={styles.nav}>
-        <div style={styles.navInner}>
-          <div style={styles.logo}>
-            <span style={styles.logoMark}>⚖</span>
-            <span style={styles.logoText}>Lawditor</span>
+    <div className="min-h-screen bg-[#050505] text-white">
+      {/* Background Glow */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none opacity-20">
+        <div className="absolute top-[-20%] left-[-10%] w-[60%] h-[60%] bg-emerald-500/20 blur-[150px] rounded-full" />
+      </div>
+
+      {/* Nav */}
+      <nav className="sticky top-0 z-50 bg-[#050505]/80 backdrop-blur-xl border-b border-white/5">
+        <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-gradient-to-br from-emerald-400 to-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/20">
+              <span className="text-xl">⚖</span>
+            </div>
+            <span className="text-2xl font-black tracking-tighter bg-gradient-to-r from-white to-white/60 bg-clip-text text-transparent">Lawditor</span>
           </div>
-          <div style={styles.navRight}>
-            <span style={styles.navEmail}>{user?.email}</span>
-            <button onClick={signOut} style={styles.signOutBtn}>Sign out</button>
+          <div className="flex items-center gap-6">
+            <span className="hidden md:block text-white/40 text-sm font-medium">{profile?.email}</span>
+            <button onClick={handleSignOut} className="px-5 py-2 rounded-xl border border-white/5 hover:bg-white/5 text-sm font-semibold transition-all">
+              Sign out
+            </button>
           </div>
         </div>
       </nav>
 
-      <main style={styles.main}>
-        {/* ── Header row ──────────────────────────────────────── */}
-        <div style={styles.pageHeader}>
+      <main className="max-w-7xl mx-auto px-6 py-12 relative">
+        {/* Header Section */}
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-8 mb-16">
           <div>
-            <h1 style={styles.pageTitle}>Dashboard</h1>
-            <p style={styles.pageSubtitle}>Your compliance audit workspace</p>
+            <h1 className="text-5xl font-black mb-4 tracking-tight">Your Dashboard</h1>
+            <p className="text-white/40 text-lg">Manage your Nigerian legal compliance audits and reports.</p>
           </div>
-          <Link href="/audit/new" style={styles.newAuditBtn}>
-            <span style={styles.plusIcon}>+</span>
-            New Audit
+          <Link href="/audit/new" className="px-8 py-4 bg-emerald-500 hover:bg-emerald-400 text-black font-black rounded-2xl transition-all shadow-xl shadow-emerald-500/20 text-center">
+            + New Compliance Audit
           </Link>
         </div>
 
-        {/* ── Stats row ───────────────────────────────────────── */}
-        <div style={styles.statsRow}>
-          <StatCard
-            label="Credits Remaining"
-            value={profile?.credits ?? 0}
-            sub={profile?.plan === 'free' ? 'Free plan' : `${profile?.plan} plan`}
-            accent="#c9a84c"
-            action={<Link href="/billing" style={styles.upgradeLink}>Top up →</Link>}
-          />
-          <StatCard label="Total Audits"   value={audits.length}       sub="all time"    accent="#60a5fa" />
-          <StatCard label="High Risk"       value={riskCounts.HIGH}     sub="need action" accent="#f87171" />
-          <StatCard label="Resolved / Low"  value={riskCounts.LOW}      sub="compliant"   accent="#34d399" />
+        {/* Stats Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-16">
+          <StatCard label="Credits" value={profile?.credits ?? 0} accent="#10b981" sub={profile?.plan?.toUpperCase()} />
+          <StatCard label="Total Audits" value={audits.length} accent="#3b82f6" sub="ALL TIME" />
+          <StatCard label="High Risks" value={riskCounts.HIGH} accent="#ef4444" sub="ACTION REQUIRED" />
+          <StatCard label="Compliant" value={riskCounts.LOW + riskCounts.MEDIUM} accent="#f59e0b" sub="LOW/MED RISK" />
         </div>
 
-        {/* ── Audit list ──────────────────────────────────────── */}
-        <section style={styles.section}>
-          <div style={styles.sectionHeader}>
-            <h2 style={styles.sectionTitle}>Recent Audits</h2>
-            <span style={styles.sectionCount}>{audits.length} total</span>
+        {/* Audit List */}
+        <div className="bg-[#0f0f0f] border border-white/5 rounded-[32px] overflow-hidden shadow-2xl">
+          <div className="px-8 py-6 border-b border-white/5 flex items-center justify-between">
+            <h2 className="text-xl font-bold">Recent Compliance Cycles</h2>
+            <span className="text-white/30 text-sm">{audits.length} Reports Found</span>
           </div>
 
           {audits.length === 0 ? (
-            <div style={styles.emptyState}>
-              <div style={styles.emptyIcon}>📋</div>
-              <p style={styles.emptyTitle}>No audits yet</p>
-              <p style={styles.emptySub}>Run your first compliance audit to see results here.</p>
-              <Link href="/audit/new" style={styles.emptyBtn}>Run your first audit →</Link>
+            <div className="py-32 text-center">
+              <div className="text-5xl mb-6 opacity-20">📋</div>
+              <p className="text-white/60 font-medium mb-8">No data available yet</p>
+              <Link href="/audit/new" className="text-emerald-400 font-bold hover:underline">Start your first audit →</Link>
             </div>
           ) : (
-            <div style={styles.auditList}>
-              {audits.map((audit, i) => {
-                const risk = RISK_CONFIG[audit.risk_score] || RISK_CONFIG.MEDIUM;
-                const appName = audit.findings?.app_name || cleanUrl(audit.input_url);
+            <div className="divide-y divide-white/5">
+              {audits.map((audit) => {
+                const risk = RISK_CONFIG[audit.riskScore] || RISK_CONFIG.MEDIUM;
                 return (
-                  <Link key={audit.id} href={`/audit/${audit.id}`} style={styles.auditRow}>
-                    <div style={styles.auditLeft}>
-                      <div style={{ ...styles.riskDot, background: risk.dot }} />
+                  <Link key={audit.id} href={`/audit/${audit.id}`} className="group px-8 py-6 flex items-center justify-between hover:bg-white/[0.02] transition-all">
+                    <div className="flex items-center gap-6">
+                      <div className="w-1.5 h-10 rounded-full" style={{ background: risk.dot }} />
                       <div>
-                        <p style={styles.auditName}>{appName}</p>
-                        <p style={styles.auditUrl}>{cleanUrl(audit.input_url)}</p>
+                        <p className="text-lg font-bold group-hover:text-emerald-400 transition-colors">{cleanUrl(audit.inputUrl)}</p>
+                        <p className="text-white/30 text-sm font-medium">{formatDate(audit.createdAt)}</p>
                       </div>
                     </div>
-                    <div style={styles.auditRight}>
-                      <span style={{ ...styles.riskBadge, background: risk.bg, color: risk.text }}>
+                    <div className="flex items-center gap-8">
+                       <span className="px-4 py-1.5 rounded-full text-[10px] font-black tracking-widest uppercase border" style={{ background: risk.bg, borderColor: risk.dot, color: risk.text }}>
                         {risk.label}
                       </span>
-                      <span style={styles.auditDate}>{formatDate(audit.created_at)}</span>
-                      <span style={styles.auditArrow}>→</span>
+                      <span className="opacity-20 group-hover:opacity-100 group-hover:translate-x-1 transition-all">→</span>
                     </div>
                   </Link>
                 );
               })}
             </div>
           )}
-        </section>
+        </div>
       </main>
     </div>
   );
 }
 
-function StatCard({ label, value, sub, accent, action }: {
-  label: string; value: number; sub: string; accent: string; action?: React.ReactNode;
-}) {
+function StatCard({ label, value, accent, sub }: any) {
   return (
-    <div style={styles.statCard}>
-      <div style={{ ...styles.statAccentBar, background: accent }} />
-      <p style={styles.statLabel}>{label}</p>
-      <p style={{ ...styles.statValue, color: accent }}>{value}</p>
-      <div style={styles.statFooter}>
-        <p style={styles.statSub}>{sub}</p>
-        {action}
+    <div className="bg-[#0f0f0f] border border-white/5 p-8 rounded-[32px] relative overflow-hidden group">
+      <div className="absolute top-0 right-0 w-32 h-32 bg-white/[0.02] rounded-full translate-x-10 translate-y-[-10px] blur-3xl group-hover:bg-emerald-500/5 transition-all" />
+      <p className="text-[10px] font-black tracking-[0.2em] text-white/30 uppercase mb-4">{label}</p>
+      <div className="flex items-baseline gap-2">
+        <p className="text-5xl font-black tabular-nums" style={{ color: value > 0 ? accent : '#444' }}>{value}</p>
+        <p className="text-[10px] font-black text-white/20">{sub}</p>
       </div>
     </div>
   );
 }
-
-const styles: Record<string, React.CSSProperties> = {
-  root: {
-    minHeight: '100vh',
-    background: '#0b0f1a',
-    color: '#e2e8f0',
-    fontFamily: "'Georgia', 'Times New Roman', serif",
-  },
-  loadWrap: {
-    minHeight: '100vh', background: '#0b0f1a',
-    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16,
-  },
-  spinner: {
-    width: 36, height: 36,
-    border: '3px solid rgba(201,168,76,0.2)',
-    borderTop: '3px solid #c9a84c',
-    borderRadius: '50%',
-    animation: 'spin 0.8s linear infinite',
-  },
-  loadText: { color: '#64748b', fontSize: 14, fontFamily: 'system-ui, sans-serif' },
-
-  // Nav
-  nav: {
-    borderBottom: '1px solid rgba(255,255,255,0.06)',
-    background: 'rgba(11,15,26,0.95)',
-    backdropFilter: 'blur(12px)',
-    position: 'sticky', top: 0, zIndex: 100,
-  },
-  navInner: {
-    maxWidth: 1100, margin: '0 auto', padding: '0 24px',
-    height: 60, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-  },
-  logo: { display: 'flex', alignItems: 'center', gap: 10 },
-  logoMark: { fontSize: 20 },
-  logoText: {
-    fontSize: 18, fontWeight: 700, color: '#f1f5f9',
-    letterSpacing: '-0.01em',
-  },
-  navRight: { display: 'flex', alignItems: 'center', gap: 16 },
-  navEmail: { fontSize: 13, color: '#64748b', fontFamily: 'system-ui, sans-serif' },
-  signOutBtn: {
-    fontSize: 13, color: '#94a3b8', background: 'none', border: '1px solid rgba(148,163,184,0.2)',
-    borderRadius: 6, padding: '5px 12px', cursor: 'pointer',
-    fontFamily: 'system-ui, sans-serif',
-  },
-
-  // Main
-  main: { maxWidth: 1100, margin: '0 auto', padding: '40px 24px 80px' },
-
-  pageHeader: {
-    display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
-    marginBottom: 36, flexWrap: 'wrap', gap: 16,
-  },
-  pageTitle: {
-    fontSize: 30, fontWeight: 700, color: '#f1f5f9',
-    margin: 0, letterSpacing: '-0.02em',
-  },
-  pageSubtitle: { fontSize: 15, color: '#64748b', margin: '4px 0 0', fontFamily: 'system-ui, sans-serif' },
-  newAuditBtn: {
-    display: 'flex', alignItems: 'center', gap: 8,
-    background: '#c9a84c', color: '#0b0f1a',
-    padding: '11px 20px', borderRadius: 8,
-    fontWeight: 700, fontSize: 14, textDecoration: 'none',
-    letterSpacing: '0.01em', fontFamily: 'system-ui, sans-serif',
-    transition: 'opacity 0.15s',
-  },
-  plusIcon: { fontSize: 18, lineHeight: 1 },
-
-  // Stats
-  statsRow: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-    gap: 16, marginBottom: 36,
-  },
-  statCard: {
-    background: 'rgba(255,255,255,0.03)',
-    border: '1px solid rgba(255,255,255,0.07)',
-    borderRadius: 12, padding: '20px 24px',
-    position: 'relative', overflow: 'hidden',
-  },
-  statAccentBar: {
-    position: 'absolute', top: 0, left: 0, right: 0, height: 2, borderRadius: '2px 2px 0 0',
-  },
-  statLabel: {
-    fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase',
-    letterSpacing: '0.08em', margin: '0 0 8px', fontFamily: 'system-ui, sans-serif',
-  },
-  statValue: {
-    fontSize: 36, fontWeight: 700, margin: '0 0 4px', lineHeight: 1,
-  },
-  statFooter: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 },
-  statSub: { fontSize: 12, color: '#475569', margin: 0, fontFamily: 'system-ui, sans-serif' },
-  upgradeLink: {
-    fontSize: 12, color: '#c9a84c', textDecoration: 'none', fontFamily: 'system-ui, sans-serif',
-    fontWeight: 600,
-  },
-
-  // Section
-  section: {
-    background: 'rgba(255,255,255,0.02)',
-    border: '1px solid rgba(255,255,255,0.07)',
-    borderRadius: 12, overflow: 'hidden',
-  },
-  sectionHeader: {
-    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-    padding: '18px 24px', borderBottom: '1px solid rgba(255,255,255,0.06)',
-  },
-  sectionTitle: { fontSize: 16, fontWeight: 600, color: '#f1f5f9', margin: 0 },
-  sectionCount: { fontSize: 13, color: '#475569', fontFamily: 'system-ui, sans-serif' },
-
-  // Audit rows
-  auditList: { display: 'flex', flexDirection: 'column' },
-  auditRow: {
-    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-    padding: '16px 24px', textDecoration: 'none', color: 'inherit',
-    borderBottom: '1px solid rgba(255,255,255,0.04)',
-    transition: 'background 0.15s',
-    cursor: 'pointer',
-  },
-  auditLeft: { display: 'flex', alignItems: 'center', gap: 14, minWidth: 0 },
-  riskDot: { width: 8, height: 8, borderRadius: '50%', flexShrink: 0 },
-  auditName: {
-    fontSize: 15, fontWeight: 600, color: '#e2e8f0', margin: '0 0 2px',
-    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 320,
-  },
-  auditUrl: {
-    fontSize: 12, color: '#475569', margin: 0,
-    fontFamily: 'system-ui, sans-serif',
-    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 320,
-  },
-  auditRight: { display: 'flex', alignItems: 'center', gap: 14, flexShrink: 0 },
-  riskBadge: {
-    fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 4,
-    letterSpacing: '0.06em', fontFamily: 'system-ui, sans-serif',
-  },
-  auditDate: { fontSize: 12, color: '#475569', fontFamily: 'system-ui, sans-serif' },
-  auditArrow: { fontSize: 16, color: '#334155' },
-
-  // Empty state
-  emptyState: {
-    padding: '64px 24px', textAlign: 'center', display: 'flex',
-    flexDirection: 'column', alignItems: 'center', gap: 8,
-  },
-  emptyIcon: { fontSize: 40, marginBottom: 8 },
-  emptyTitle: { fontSize: 18, fontWeight: 600, color: '#94a3b8', margin: 0 },
-  emptySub: { fontSize: 14, color: '#475569', margin: '4px 0 16px', fontFamily: 'system-ui, sans-serif' },
-  emptyBtn: {
-    fontSize: 14, color: '#c9a84c', textDecoration: 'none',
-    fontWeight: 600, fontFamily: 'system-ui, sans-serif',
-  },
-};

@@ -1,37 +1,64 @@
-// src/app/api/generate-pdf/route.ts
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { createClient } from '@supabase/supabase-js';
+import { prisma } from "@/lib/prisma";
 import fs from 'fs';
+import path from 'path';
+import os from 'os';
+import { NextResponse } from "next/server";
 
 const execAsync = promisify(exec);
-const supabase = createClient(
-process.env.NEXT_PUBLIC_SUPABASE_URL!,
-process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
 
 export async function POST(req: Request) {
-const { auditId, findings } = await req.json();
+  try {
+    const { auditId, findings } = await req.json();
 
-// Write findings to temp file
-const tmpIn = `/tmp/audit_${auditId}.json`;
-const tmpOut = `/tmp/audit_${auditId}.pdf`;
-fs.writeFileSync(tmpIn, JSON.stringify(findings));
+    if (!auditId || !findings) {
+      return NextResponse.json({ error: "Missing required data" }, { status: 400 });
+    }
 
-// Call your Python ReportLab script
-await execAsync(`python3 scripts/generate_report.py ${tmpIn} ${tmpOut}`);
+    // 1. Prepare temp paths for Python script
+    const tmpIn = path.join(os.tmpdir(), `audit_in_${auditId}.json`);
+    const tmpOut = path.join(os.tmpdir(), `audit_out_${auditId}.pdf`);
+    
+    fs.writeFileSync(tmpIn, JSON.stringify(findings));
 
-// Upload PDF to Supabase Storage
-const pdfBuffer = fs.readFileSync(tmpOut);
-await supabase.storage.from('reports')
-.upload(`${auditId}/report.pdf`, pdfBuffer, { contentType: 'application/pdf' });
+    // 2. Execute Python ReportLab script
+    const pythonCmd = process.platform === 'win32' ? 'python' : 'python3';
+    try {
+      await execAsync(`${pythonCmd} scripts/generate_report.py "${tmpIn}" "${tmpOut}"`);
+    } catch (pyErr: any) {
+      console.error("Python Error:", pyErr.stderr);
+      return NextResponse.json({ error: "PDF Generation Engine failed" }, { status: 500 });
+    }
 
-// Create a signed download URL (valid 1 hour)
-const { data } = await supabase.storage.from('reports')
-.createSignedUrl(`${auditId}/report.pdf`, 3600);
+    // 3. Move file to public storage (for MVP/Local testing)
+    const publicDir = path.join(process.cwd(), 'public', 'reports');
+    if (!fs.existsSync(publicDir)) {
+      fs.mkdirSync(publicDir, { recursive: true });
+    }
 
-// Save path to audit record
-await supabase.from('audits')
-.update({ pdf_path: `${auditId}/report.pdf` }).eq('id', auditId);
-return Response.json({ downloadUrl: data?.signedUrl });
+    const publicPath = path.join(publicDir, `${auditId}.pdf`);
+    fs.copyFileSync(tmpOut, publicPath);
+
+    // 4. Update Database record via Prisma
+    const downloadUrl = `/reports/${auditId}.pdf`;
+    
+    await prisma.audit.update({
+      where: { id: auditId },
+      data: { pdfPath: downloadUrl }
+    });
+
+    // 5. Cleanup temp files
+    try {
+      fs.unlinkSync(tmpIn);
+      fs.unlinkSync(tmpOut);
+    } catch (e) {
+      console.warn("Temp cleanup failed:", e);
+    }
+
+    return NextResponse.json({ downloadUrl });
+  } catch (error: any) {
+    console.error("PDF Route Error:", error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
 }

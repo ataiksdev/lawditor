@@ -56,7 +56,7 @@ summary      = data.get("executive_summary", "No summary provided.")
 findings     = data.get("findings", [])
 req_docs     = data.get("required_documents", [])
 next_steps   = data.get("next_steps", [])
-audit_date   = datetime.now().strftime("%-d %B %Y")
+audit_date   = datetime.now().strftime("%d %B %Y").lstrip("0") if sys.platform == "win32" else datetime.now().strftime("%-d %B %Y")
 
 # ── Dimensions ───────────────────────────────────────────────────────────────
 W, H = A4
